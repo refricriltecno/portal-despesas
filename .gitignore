@@ -1,0 +1,12 @@
+# Dependências
+node_modules/
+venv/
+__pycache__/
+
+# Variáveis de ambiente
+.env
+
+# Compilação e IDEs
+dist/
+.vscode/
+.idea/
