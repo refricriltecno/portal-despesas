@@ -8,7 +8,6 @@ from bson import ObjectId
 
 app = FastAPI()
 
-# Permite que o seu React (mesmo no Render) acesse a API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,7 +15,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# SUA URL DO ATLAS
 MONGO_URL = "mongodb+srv://tecnologia_db_user:AdmRef212@refricril.lfg6bem.mongodb.net/?appName=Refricril"
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.portal_refricril
@@ -33,6 +31,8 @@ class ContratoSchema(BaseModel):
     cnpj1: str
     status: str = "Ativo"
 
+# --- ROTAS DE CONTRATOS ---
+
 @app.get("/api/contratos")
 async def listar_contratos():
     contratos = []
@@ -47,7 +47,13 @@ async def criar_contrato(contrato: ContratoSchema):
     result = await db.contratos.insert_one(contrato.dict())
     return {"id": str(result.inserted_id)}
 
+# CORREÇÃO DO ERRO 405: Rota para Atualizar (PUT)
+@app.put("/api/contratos/{id}")
+async def atualizar_contrato(id: str, contrato: ContratoSchema):
+    await db.contratos.update_one({"_id": ObjectId(id)}, {"$set": contrato.dict()})
+    return {"status": "updated"}
+
 @app.delete("/api/contratos/{id}")
 async def deletar_contrato(id: str):
     await db.contratos.delete_one({"_id": ObjectId(id)})
-    return {"status": "success"}
+    return {"status": "deleted"}
