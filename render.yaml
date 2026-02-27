@@ -26,8 +26,6 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
+      # Definimos a URL pública diretamente aqui
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: portal-despesas-backend
-          property: url
+        value: https://portal-despesas-backend.onrender.com
