@@ -1,18 +1,29 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { FileDown, Receipt, FileText } from 'lucide-react'; // Importação dos ícones
+
+// URL do seu backend no Render (ou localhost em desenvolvimento)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function Faturas() {
   const [isCreating, setIsCreating] = useState(false);
   const [editId, setEditId] = useState(null);
 
   // ==========================================
-  // INTEGRAÇÃO COM CONTRATOS (Lê da aba vizinha)
+  // INTEGRAÇÃO COM CONTRATOS (Lê da API/MongoDB)
   // ==========================================
   const [contratos, setContratos] = useState([]);
+  
   useEffect(() => {
-    const contratosSalvos = localStorage.getItem('contratos_teste');
-    if (contratosSalvos) {
-      setContratos(JSON.parse(contratosSalvos));
-    }
+    const carregarContratos = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/contratos`);
+        setContratos(res.data);
+      } catch (error) {
+        console.error("Erro ao carregar contratos na tela de faturas:", error);
+      }
+    };
+    carregarContratos();
   }, []);
 
   // ==========================================
@@ -31,7 +42,7 @@ export default function Faturas() {
   }, [faturas]);
 
   // ==========================================
-  // ESTADOS DO FORMULÁRIO
+  // ESTADOS DO FORMULÁRIO E ARQUIVOS
   // ==========================================
   const formInicial = {
     contratoId: '',
@@ -44,9 +55,13 @@ export default function Faturas() {
     observacoes: ''
   };
   const [formData, setFormData] = useState(formInicial);
+  
+  // Estados para capturar os arquivos físicos no futuro
+  const [arquivoBoleto, setArquivoBoleto] = useState(null);
+  const [arquivoNf, setArquivoNf] = useState(null);
 
   // ==========================================
-  // FUNÇÕES DE LÓGICA E CÁLCULO
+  // FUNÇÕES DE LÓGICA, CÁLCULO E DIVERGÊNCIA
   // ==========================================
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -63,28 +78,42 @@ export default function Faturas() {
     return 'R$ 0,00';
   };
 
+  const parseCurrency = (val) => {
+    if (!val) return 0;
+    return parseFloat(String(val).replace('R$', '').replace(/\./g, '').replace(',', '.')) || 0;
+  };
+
+  const checarDivergencia = (fatura, contrato) => {
+    if (!contrato) return false;
+    const valFatura = parseCurrency(fatura.totalCalculado);
+    const valContrato = parseCurrency(contrato.valorMensal);
+    return Math.abs(valFatura - valContrato) > 0.01;
+  };
+
   // ==========================================
   // AÇÕES DO CRUD
   // ==========================================
   const onSubmit = (e) => {
     e.preventDefault();
     
-    // Procura o nome do contrato selecionado
-    const contratoSelecionado = contratos.find(c => c.id.toString() === formData.contratoId.toString());
+    const contratoSelecionado = contratos.find(c => (c.id || c._id).toString() === formData.contratoId.toString());
     const nomeContrato = contratoSelecionado ? contratoSelecionado.nomeAmigavel : "Desconhecido";
 
     const payload = {
       ...formData,
       nomeContrato: nomeContrato,
       totalCalculado: calcularTotalPagar(),
-      status: "Pendente"
+      status: "Pendente",
+      // Simulando nomes de arquivo. Futuramente virão do Backend.
+      caminho_arquivo: arquivoBoleto ? `uploads/${arquivoBoleto.name}` : null,
+      caminho_nf: arquivoNf ? `uploads/${arquivoNf.name}` : null
     };
 
     if (editId) {
       setFaturas(faturas.map(f => f.id === editId ? { ...f, ...payload } : f));
       alert("Fatura atualizada com sucesso!");
     } else {
-      payload.id = crypto.randomUUID(); // <-- CORREÇÃO DO LINTER AQUI
+      payload.id = crypto.randomUUID();
       setFaturas([...faturas, payload]);
       alert("Nova fatura lançada com sucesso!");
     }
@@ -108,6 +137,8 @@ export default function Faturas() {
     setIsCreating(false);
     setEditId(null);
     setFormData(formInicial);
+    setArquivoBoleto(null);
+    setArquivoNf(null);
   };
 
   // ==========================================
@@ -115,7 +146,7 @@ export default function Faturas() {
   // ==========================================
   if (!isCreating) {
     return (
-      <div className="max-w-7xl mx-auto font-sans">
+      <div className="max-w-7xl mx-auto font-sans p-4">
         <div className="flex justify-between items-center mb-6 border-b pb-4">
           <h2 className="text-3xl font-bold text-slate-800">Lançamento de Faturas</h2>
           <button onClick={() => setIsCreating(true)} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors">
@@ -131,26 +162,60 @@ export default function Faturas() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês Ref.</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total a Pagar</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Documentos</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {faturas.map((f) => (
-                <tr key={f.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{f.nomeContrato}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">{f.mesReferencia}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                    {f.vencimento ? new Date(f.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-900 font-bold">{f.totalCalculado}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button onClick={() => handleEdit(f)} className="text-blue-600 hover:text-blue-900 mr-4 font-semibold">Editar</button>
-                    <button onClick={() => handleDelete(f.id)} className="text-red-600 hover:text-red-900 font-semibold">Excluir</button>
-                  </td>
-                </tr>
-              ))}
+              {faturas.map((f) => {
+                const contrato = contratos.find(c => (c.id || c._id).toString() === f.contratoId.toString());
+                const divergente = checarDivergencia(f, contrato);
+                const valorEsperado = contrato ? contrato.valorMensal : 'R$ 0,00';
+
+                return (
+                  <tr key={f.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{f.nomeContrato}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">{f.mesReferencia}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                      {f.vencimento ? new Date(f.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`font-bold ${divergente ? 'text-red-600' : 'text-green-600'}`}>
+                        {f.totalCalculado}
+                      </div>
+                      {divergente && (
+                        <div className="text-[11px] text-red-500 font-medium mt-1 bg-red-50 px-2 py-1 rounded inline-block">
+                          Contrato: {valorEsperado}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex space-x-3">
+                        {/* Download Boleto */}
+                        <a href={f.caminho_arquivo ? `${API_URL}/${f.caminho_arquivo}` : '#'} target={f.caminho_arquivo ? "_blank" : "_self"} onClick={(e) => !f.caminho_arquivo && e.preventDefault()} className={`flex items-center gap-1 text-sm font-semibold transition-colors ${f.caminho_arquivo ? 'text-blue-600 hover:text-blue-800' : 'text-gray-300 cursor-not-allowed'}`} title="Baixar Boleto">
+                          <FileDown size={18} /> Boleto
+                        </a>
+
+                        {/* Download NF */}
+                        <a href={f.caminho_nf ? `${API_URL}/${f.caminho_nf}` : '#'} target={f.caminho_nf ? "_blank" : "_self"} onClick={(e) => !f.caminho_nf && e.preventDefault()} className={`flex items-center gap-1 text-sm font-semibold transition-colors ${f.caminho_nf ? 'text-emerald-600 hover:text-emerald-800' : 'text-gray-300 cursor-not-allowed'}`} title="Baixar Nota Fiscal">
+                          <Receipt size={18} /> NF
+                        </a>
+
+                        {/* Download Contrato */}
+                        <a href={contrato?.caminho_arquivo ? `${API_URL}/${contrato.caminho_arquivo}` : '#'} target={contrato?.caminho_arquivo ? "_blank" : "_self"} onClick={(e) => !contrato?.caminho_arquivo && e.preventDefault()} className={`flex items-center gap-1 text-sm font-semibold transition-colors ${contrato?.caminho_arquivo ? 'text-purple-600 hover:text-purple-800' : 'text-gray-300 cursor-not-allowed'}`} title="Baixar Contrato Original">
+                          <FileText size={18} /> Contrato
+                        </a>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button onClick={() => handleEdit(f)} className="text-blue-600 hover:text-blue-900 mr-4 font-semibold">Editar</button>
+                      <button onClick={() => handleDelete(f.id)} className="text-red-600 hover:text-red-900 font-semibold">Excluir</button>
+                    </td>
+                  </tr>
+                );
+              })}
               {faturas.length === 0 && (
-                <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">Nenhuma fatura lançada. Clique em "+ Nova Fatura" para começar.</td></tr>
+                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">Nenhuma fatura lançada. Clique em "+ Nova Fatura" para começar.</td></tr>
               )}
             </tbody>
           </table>
@@ -163,7 +228,7 @@ export default function Faturas() {
   // TELA 2: FORMULÁRIO
   // ==========================================
   return (
-    <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-md font-sans">
+    <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-md font-sans my-4">
       <div className="flex justify-between items-center mb-6 border-b pb-4">
         <h2 className="text-3xl font-bold text-slate-800">{editId ? 'Editar Fatura' : 'Nova Fatura'}</h2>
         <button type="button" onClick={resetForm} className="text-gray-500 hover:text-gray-800 font-medium">← Voltar para Lista</button>
@@ -173,14 +238,14 @@ export default function Faturas() {
         
         {/* BLOCO 1: Geral */}
         <section>
-          <h3 className="text-xl font-semibold text-blue-600 mb-4">1. Geral</h3>
+          <h3 className="text-xl font-semibold text-blue-600 mb-4 border-l-4 border-blue-600 pl-2">1. Geral</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Contrato *</label>
               <select name="contratoId" value={formData.contratoId} required onChange={handleChange} className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500">
                 <option value="">Selecione um contrato...</option>
                 {contratos.map(c => (
-                  <option key={c.id} value={c.id}>{c.nomeAmigavel}</option>
+                  <option key={c.id || c._id} value={c.id || c._id}>{c.nomeAmigavel}</option>
                 ))}
               </select>
             </div>
@@ -201,7 +266,7 @@ export default function Faturas() {
 
         {/* BLOCO 2: Valores */}
         <section>
-          <h3 className="text-xl font-semibold text-blue-600 mb-4">2. Valores</h3>
+          <h3 className="text-xl font-semibold text-blue-600 mb-4 border-l-4 border-blue-600 pl-2">2. Valores</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
             <div>
               <label className="block text-sm font-medium text-gray-700">Valor Original (Boleto) *</label>
@@ -232,20 +297,24 @@ export default function Faturas() {
 
         {/* BLOCO 4: Arquivos */}
         <section>
-          <h3 className="text-xl font-semibold text-blue-600 mb-4">3. Arquivos</h3>
+          <h3 className="text-xl font-semibold text-blue-600 mb-4 border-l-4 border-blue-600 pl-2">3. Arquivos</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="border-2 border-dashed border-gray-400 rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer">
+            <div className={`border-2 border-dashed rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer ${arquivoBoleto ? 'border-blue-500 bg-blue-50' : 'border-gray-400'}`}>
               <label className="cursor-pointer block">
-                <span className="block text-blue-600 font-bold mb-1">Boleto Bancário (PDF) *</span>
-                <span className="text-sm text-gray-500">Clique para anexar o boleto</span>
-                <input type="file" required={!editId} accept=".pdf" className="sr-only" />
+                <span className={`block font-bold mb-1 ${arquivoBoleto ? 'text-blue-700' : 'text-blue-600'}`}>
+                  {arquivoBoleto ? '✅ Boleto Anexado' : 'Boleto Bancário (PDF) *'}
+                </span>
+                <span className="text-sm text-gray-500">{arquivoBoleto ? arquivoBoleto.name : 'Clique para anexar o boleto'}</span>
+                <input type="file" required={!editId} accept=".pdf" className="sr-only" onChange={(e) => setArquivoBoleto(e.target.files[0])} />
               </label>
             </div>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer">
+            <div className={`border-2 border-dashed rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer ${arquivoNf ? 'border-green-500 bg-green-50' : 'border-gray-300'}`}>
               <label className="cursor-pointer block">
-                <span className="block text-gray-700 font-bold mb-1">Nota Fiscal (Opcional)</span>
-                <span className="text-sm text-gray-500">Clique para anexar a NF (.pdf, .xml)</span>
-                <input type="file" accept=".pdf,.xml" className="sr-only" />
+                <span className={`block font-bold mb-1 ${arquivoNf ? 'text-green-700' : 'text-gray-700'}`}>
+                  {arquivoNf ? '✅ NF Anexada' : 'Nota Fiscal (Opcional)'}
+                </span>
+                <span className="text-sm text-gray-500">{arquivoNf ? arquivoNf.name : 'Clique para anexar a NF (.pdf, .xml)'}</span>
+                <input type="file" accept=".pdf,.xml" className="sr-only" onChange={(e) => setArquivoNf(e.target.files[0])} />
               </label>
             </div>
           </div>
@@ -254,7 +323,7 @@ export default function Faturas() {
         {/* BOTÕES */}
         <div className="flex justify-end space-x-4 border-t pt-6">
           <button type="button" onClick={resetForm} className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50">Cancelar</button>
-          <button type="submit" className="px-6 py-2 border border-transparent rounded-md text-white bg-green-600 hover:bg-green-700">
+          <button type="submit" className="px-6 py-2 border border-transparent rounded-md text-white bg-green-600 hover:bg-green-700 font-bold shadow-lg transition-transform active:scale-95">
             {editId ? 'Atualizar Fatura' : 'Lançar Fatura'}
           </button>
         </div>

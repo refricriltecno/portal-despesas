@@ -1,4 +1,5 @@
 import os
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -30,6 +31,13 @@ class ContratoSchema(BaseModel):
     fornecedor1: str
     cnpj1: str
     status: str = "Ativo"
+    # Adicionando os campos que estavam faltando (usamos Optional para não dar erro se vierem vazios)
+    dataInicio: Optional[str] = None
+    circ1: Optional[str] = None
+    tags: Optional[str] = None
+    info: Optional[str] = None
+    fornecedor2: Optional[dict] = None
+    isRateado: Optional[bool] = False
 
 # --- ROTAS DE CONTRATOS ---
 
@@ -57,3 +65,6 @@ async def atualizar_contrato(id: str, contrato: ContratoSchema):
 async def deletar_contrato(id: str):
     await db.contratos.delete_one({"_id": ObjectId(id)})
     return {"status": "deleted"}
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
