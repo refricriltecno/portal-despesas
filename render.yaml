@@ -6,9 +6,9 @@ services:
     name: portal-despesas-backend
     env: python
     plan: free
-    rootDir: backend/app
+    repo: https://github.com/refricriltecno/portal-despesas # <-- APONTANDO PARA O REPO CORRETO
+    rootDir: backend/app  # <-- PASTA EXATA DO BACKEND NESSE REPO
     buildCommand: pip install -r requirements.txt
-    # Como o código está dentro de backend/app, executamos a partir de lá
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHONUNBUFFERED
@@ -21,12 +21,11 @@ services:
     name: portal-despesas-frontend
     env: static
     plan: free
+    repo: https://github.com/refricriltecno/portal-despesas # <-- APONTANDO PARA O REPO CORRETO
     rootDir: frontend
-    # Usa os comandos do seu package.json
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
-      # Injeta a URL do backend no frontend automaticamente
       - key: VITE_API_URL
         fromService:
           type: web
