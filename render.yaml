@@ -4,10 +4,10 @@ services:
   # ==========================================
   - type: web
     name: portal-despesas-backend
-    env: python
+    runtime: python
     plan: free
-    repo: https://github.com/refricriltecno/portal-despesas # <-- APONTANDO PARA O REPO CORRETO
-    rootDir: backend/app  # <-- PASTA EXATA DO BACKEND NESSE REPO
+    repo: https://github.com/refricriltecno/portal-despesas
+    rootDir: backend/app
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -17,11 +17,11 @@ services:
   # ==========================================
   # 2. SERVIÇO FRONTEND (React / Vite)
   # ==========================================
-  - type: static
+  - type: web
     name: portal-despesas-frontend
-    env: static
+    runtime: static
     plan: free
-    repo: https://github.com/refricriltecno/portal-despesas # <-- APONTANDO PARA O REPO CORRETO
+    repo: https://github.com/refricriltecno/portal-despesas
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
