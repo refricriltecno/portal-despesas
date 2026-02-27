@@ -1,0 +1,34 @@
+services:
+  # ==========================================
+  # 1. SERVIÇO BACKEND (API FastAPI)
+  # ==========================================
+  - type: web
+    name: portal-despesas-backend
+    env: python
+    plan: free
+    rootDir: backend/app
+    buildCommand: pip install -r requirements.txt
+    # Como o código está dentro de backend/app, executamos a partir de lá
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+  # ==========================================
+  # 2. SERVIÇO FRONTEND (React / Vite)
+  # ==========================================
+  - type: static
+    name: portal-despesas-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    # Usa os comandos do seu package.json
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      # Injeta a URL do backend no frontend automaticamente
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: portal-despesas-backend
+          property: url
